@@ -11,8 +11,6 @@ package frc.robot;
 public class Robot extends TimedRobot {
   //
   //
-  //chicken
-  //
   @Override
   public void robotInit() {
   }
