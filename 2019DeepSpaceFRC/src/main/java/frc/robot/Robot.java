@@ -8,6 +8,7 @@ import edu.wpi.first.wpilibj.TimedRobot;
 public class Robot extends TimedRobot {
   
   WPI_TalonSRX left1 = new WPI_TalonSRX(1);
+  WPI_TalonSRX left2 = new WPI_TalonSRX(2);
   
   @Override
   public void robotInit() {
