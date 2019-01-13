@@ -2,10 +2,12 @@
 package frc.robot;
 
 import com.ctre.phoenix.motorcontrol.can.WPI_TalonSRX;
+import com.kauailabs.navx.frc.AHRS;
 
 import edu.wpi.first.wpilibj.Joystick;
 import edu.wpi.first.wpilibj.SpeedControllerGroup;
 import edu.wpi.first.wpilibj.TimedRobot;
+import edu.wpi.first.wpilibj.SerialPort.Port;
 import edu.wpi.first.wpilibj.drive.DifferentialDrive;
 
 public class Robot extends TimedRobot {
@@ -21,6 +23,9 @@ public class Robot extends TimedRobot {
   DifferentialDrive mainDrive = new DifferentialDrive(left, right);
   
   Joystick driver = new Joystick(0);//Joystick for the driver
+  Joystick manip = new Joystick(1); //Joystick for the manipulator
+  AHRS navx = new AHRS(Port.kMXP);  //NavX
+  Limelight limelight = new Limelight();//Limelight object to handle getting the data
 
   @Override
   public void robotInit() {
@@ -29,6 +34,7 @@ public class Robot extends TimedRobot {
   @Override
   public void robotPeriodic() {
   }
+
   @Override
   public void autonomousInit() {
   }
@@ -40,11 +46,17 @@ public class Robot extends TimedRobot {
   public void teleopPeriodic() {
     double y = driver.getRawAxis(1);
     double rot = driver.getRawAxis(0);
-    if(Math.abs(y) >= 0.1 || Math.abs(rot) >= 0.1) {//drive code
+    if(Math.abs(y) >= 0.1 || Math.abs(rot) >= 0.1) {
       mainDrive.arcadeDrive(y, rot);
     } else {
-      mainDrive.arcadeDrive(0, 0);//stop
+      mainDrive.arcadeDrive(0, 0);
     }
+
+    read();//Read from sensors
+  }
+
+  private void read() {
+
   }
 
   @Override
