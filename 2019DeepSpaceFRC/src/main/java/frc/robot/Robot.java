@@ -43,7 +43,7 @@ public class Robot extends TimedRobot {
     if(Math.abs(y) >= 0.1 || Math.abs(rot) >= 0.1) {//drive code
       mainDrive.arcadeDrive(y, rot);
     } else {
-      mainDrive.arcadeDrive(0, 0);
+      mainDrive.arcadeDrive(0, 0);//stop
     }
   }
 
