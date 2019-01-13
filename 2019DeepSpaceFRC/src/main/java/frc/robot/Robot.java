@@ -20,7 +20,7 @@ public class Robot extends TimedRobot {
   SpeedControllerGroup right = new SpeedControllerGroup(right1, right2, right3);
   DifferentialDrive mainDrive = new DifferentialDrive(left, right);
   
-  Joystick driver = new Joystick(0);
+  Joystick driver = new Joystick(0);//Joystick for the driver
 
   @Override
   public void robotInit() {
