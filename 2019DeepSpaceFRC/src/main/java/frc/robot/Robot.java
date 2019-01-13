@@ -40,7 +40,7 @@ public class Robot extends TimedRobot {
   public void teleopPeriodic() {
     double y = driver.getRawAxis(1);
     double rot = driver.getRawAxis(0);
-    if(Math.abs(y) >= 0.1 || Math.abs(rot) >= 0.1) {
+    if(Math.abs(y) >= 0.1 || Math.abs(rot) >= 0.1) {//drive code
       mainDrive.arcadeDrive(y, rot);
     } else {
       mainDrive.arcadeDrive(0, 0);
