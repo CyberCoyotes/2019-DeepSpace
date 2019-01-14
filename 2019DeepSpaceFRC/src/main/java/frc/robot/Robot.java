@@ -9,6 +9,7 @@ import edu.wpi.first.wpilibj.SpeedControllerGroup;
 import edu.wpi.first.wpilibj.TimedRobot;
 import edu.wpi.first.wpilibj.SerialPort.Port;
 import edu.wpi.first.wpilibj.drive.DifferentialDrive;
+import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 
 public class Robot extends TimedRobot {
   
@@ -24,8 +25,13 @@ public class Robot extends TimedRobot {
   
   Joystick driver = new Joystick(0);//Joystick for the driver
   Joystick manip = new Joystick(1); //Joystick for the manipulator
-  AHRS navx = new AHRS(Port.kMXP);  //NavX
+  //AHRS navx = new AHRS(Port.kMXP);  //NavX
   Limelight limelight = new Limelight();//Limelight object to handle getting the data
+
+  @Override
+  public void disabledPeriodic() {
+    read();
+  }
 
   @Override
   public void robotInit() {
@@ -56,7 +62,8 @@ public class Robot extends TimedRobot {
   }
 
   private void read() {
-
+    SmartDashboard.putNumber("Center-x", limelight.getX());
+    SmartDashboard.putNumber("Skew", limelight.getSkew());
   }
 
   @Override
