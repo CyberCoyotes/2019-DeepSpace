@@ -5,14 +5,17 @@ import com.ctre.phoenix.motorcontrol.can.WPI_TalonSRX;
 import com.kauailabs.navx.frc.AHRS;
 
 import edu.wpi.first.wpilibj.Joystick;
+import edu.wpi.first.wpilibj.PIDController;
+import edu.wpi.first.wpilibj.Spark;
 import edu.wpi.first.wpilibj.SpeedControllerGroup;
 import edu.wpi.first.wpilibj.TimedRobot;
-import edu.wpi.first.wpilibj.SerialPort.Port;
+import edu.wpi.first.wpilibj.I2C.Port;
 import edu.wpi.first.wpilibj.drive.DifferentialDrive;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 
 public class Robot extends TimedRobot {
   
+  Spark pidOutput = new Spark(9);
   WPI_TalonSRX left1 = new WPI_TalonSRX(1);
   WPI_TalonSRX left2 = new WPI_TalonSRX(2);
   WPI_TalonSRX left3 = new WPI_TalonSRX(3);
@@ -24,9 +27,16 @@ public class Robot extends TimedRobot {
   DifferentialDrive mainDrive = new DifferentialDrive(left, right);
   
   Joystick driver = new Joystick(0);//Joystick for the driver
-  Joystick manip = new Joystick(1); //Joystick for the manipulator
-  //AHRS navx = new AHRS(Port.kMXP);  //NavX
+  //Joystick manip = new Joystick(1); //Joystick for the manipulator
+  AHRS navx = new AHRS(Port.kMXP);  //NavX
   Limelight limelight = new Limelight();//Limelight object to handle getting the data
+
+  PIDController turnPID = new PIDController(0.03, 0.0075, 0, limelight, pidOutput);
+
+  @Override
+  public void disabledInit() {
+    turnPID.disable();
+  }
 
   @Override
   public void disabledPeriodic() {
@@ -35,6 +45,7 @@ public class Robot extends TimedRobot {
 
   @Override
   public void robotInit() {
+    mainDrive.setSafetyEnabled(false);
   }
 
   @Override
@@ -48,12 +59,25 @@ public class Robot extends TimedRobot {
   @Override
   public void autonomousPeriodic() {
   }
+
+  @Override
+  public void teleopInit() {
+  }
   @Override
   public void teleopPeriodic() {
-    double y = driver.getRawAxis(1);
-    double rot = driver.getRawAxis(0);
+    if(driver.getRawButtonPressed(4)) {
+      turnPID.reset();
+      turnPID.enable();
+    }
+    if(driver.getRawButtonReleased(4)) {
+      turnPID.disable();
+    }
+    double y = driver.getRawAxis(1)*0.5;
+    double rot = driver.getRawAxis(4)*-0.5;
     if(Math.abs(y) >= 0.1 || Math.abs(rot) >= 0.1) {
       mainDrive.arcadeDrive(y, rot);
+    } else if(driver.getRawButton(4)) {
+      mainDrive.arcadeDrive(y, turnPID.get());
     } else {
       mainDrive.arcadeDrive(0, 0);
     }
@@ -63,7 +87,9 @@ public class Robot extends TimedRobot {
 
   private void read() {
     SmartDashboard.putNumber("Center-x", limelight.getX());
+    SmartDashboard.putNumber("NavX", navx.getAngle());
     SmartDashboard.putNumber("Skew", limelight.getSkew());
+    SmartDashboard.putNumber("Center-y", limelight.getY());
   }
 
   @Override
