@@ -31,10 +31,11 @@ public class Robot extends TimedRobot {
   AHRS navx = new AHRS(Port.kMXP);  //NavX
   Limelight limelight = new Limelight();//Limelight object to handle getting the data
 
-  PIDController turnPID = new PIDController(0.03, 0.0075, 0, limelight, pidOutput);
+  PIDController turnPID = new PIDController(0.05, 0, 0, limelight, pidOutput);
 
   @Override
   public void disabledInit() {
+    limelight.setPipeline(1);
     turnPID.disable();
   }
 
@@ -72,12 +73,16 @@ public class Robot extends TimedRobot {
     if(driver.getRawButtonReleased(4)) {
       turnPID.disable();
     }
-    double y = driver.getRawAxis(1)*0.5;
-    double rot = driver.getRawAxis(4)*-0.5;
+    double y = driver.getRawAxis(1)*0.8;
+    double rot = driver.getRawAxis(4)*-0.8;
     if(Math.abs(y) >= 0.1 || Math.abs(rot) >= 0.1) {
       mainDrive.arcadeDrive(y, rot);
     } else if(driver.getRawButton(4)) {
-      mainDrive.arcadeDrive(y, turnPID.get());
+      if(limelight.hasValidTarget()) {        
+        mainDrive.arcadeDrive(-0.6, turnPID.get());
+      } else {
+        mainDrive.arcadeDrive(0, 0);
+      }
     } else {
       mainDrive.arcadeDrive(0, 0);
     }
