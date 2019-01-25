@@ -4,6 +4,7 @@ package frc.robot;
 import com.ctre.phoenix.motorcontrol.can.WPI_TalonSRX;
 import com.kauailabs.navx.frc.AHRS;
 
+import edu.wpi.first.wpilibj.DigitalInput;
 import edu.wpi.first.wpilibj.Joystick;
 import edu.wpi.first.wpilibj.PIDController;
 import edu.wpi.first.wpilibj.Spark;
@@ -27,15 +28,16 @@ public class Robot extends TimedRobot {
   DifferentialDrive mainDrive = new DifferentialDrive(left, right);
   
   Joystick driver = new Joystick(0);//Joystick for the driver
+  DigitalInput in1 = new DigitalInput(0);
+  DigitalInput in2 = new DigitalInput(1);
   //Joystick manip = new Joystick(1); //Joystick for the manipulator
   AHRS navx = new AHRS(Port.kMXP);  //NavX
   Limelight limelight = new Limelight();//Limelight object to handle getting the data
 
-  PIDController turnPID = new PIDController(0.05, 0, 0, limelight, pidOutput);
+  PIDController turnPID = new PIDController(0.04, 0, 0, limelight, pidOutput);
 
   @Override
   public void disabledInit() {
-    limelight.setPipeline(1);
     turnPID.disable();
   }
 
@@ -78,8 +80,15 @@ public class Robot extends TimedRobot {
     if(Math.abs(y) >= 0.1 || Math.abs(rot) >= 0.1) {
       mainDrive.arcadeDrive(y, rot);
     } else if(driver.getRawButton(4)) {
-      if(limelight.hasValidTarget()) {        
-        mainDrive.arcadeDrive(-0.6, turnPID.get());
+      if(limelight.hasValidTarget()) {
+        double height = limelight.getHeight();
+        double speed = 0;
+        if(9 <= height && height <= 11) {
+          speed = 0;
+        } else {
+          speed = (height-10) * 0.2;
+        }
+        mainDrive.arcadeDrive(speed, turnPID.get());
       } else {
         mainDrive.arcadeDrive(0, 0);
       }
@@ -95,6 +104,9 @@ public class Robot extends TimedRobot {
     SmartDashboard.putNumber("NavX", navx.getAngle());
     SmartDashboard.putNumber("Skew", limelight.getSkew());
     SmartDashboard.putNumber("Center-y", limelight.getY());
+    SmartDashboard.putBoolean("in1", in1.get());
+    SmartDashboard.putBoolean("in2", in2.get());
+    SmartDashboard.putNumber("Height", limelight.getHeight());
   }
 
   @Override
