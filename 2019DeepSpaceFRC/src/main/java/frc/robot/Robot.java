@@ -7,6 +7,7 @@ import com.kauailabs.navx.frc.AHRS;
 import edu.wpi.first.wpilibj.DigitalInput;
 import edu.wpi.first.wpilibj.Joystick;
 import edu.wpi.first.wpilibj.PIDController;
+import edu.wpi.first.wpilibj.Servo;
 import edu.wpi.first.wpilibj.Spark;
 import edu.wpi.first.wpilibj.SpeedControllerGroup;
 import edu.wpi.first.wpilibj.TimedRobot;
@@ -16,7 +17,6 @@ import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 
 public class Robot extends TimedRobot {
   
-  Spark pidOutput = new Spark(9);
   WPI_TalonSRX left1 = new WPI_TalonSRX(1);
   WPI_TalonSRX left2 = new WPI_TalonSRX(2);
   WPI_TalonSRX left3 = new WPI_TalonSRX(3);
@@ -28,17 +28,16 @@ public class Robot extends TimedRobot {
   DifferentialDrive mainDrive = new DifferentialDrive(left, right);
   
   Joystick driver = new Joystick(0);//Joystick for the driver
-  DigitalInput in1 = new DigitalInput(0);
-  DigitalInput in2 = new DigitalInput(1);
-  //Joystick manip = new Joystick(1); //Joystick for the manipulator
   AHRS navx = new AHRS(Port.kMXP);  //NavX
   Limelight limelight = new Limelight();//Limelight object to handle getting the data
 
-  PIDController turnPID = new PIDController(0.04, 0, 0, limelight, pidOutput);
+  double goalHeight = 10;//Used in vision processing
+  double goalThreshold = 1;
+  double distanceKP = 0.2;
+  double rotationKP = 0.04;
 
   @Override
   public void disabledInit() {
-    turnPID.disable();
   }
 
   @Override
@@ -68,32 +67,34 @@ public class Robot extends TimedRobot {
   }
   @Override
   public void teleopPeriodic() {
-    if(driver.getRawButtonPressed(4)) {
-      turnPID.reset();
-      turnPID.enable();
-    }
-    if(driver.getRawButtonReleased(4)) {
-      turnPID.disable();
-    }
-    double y = driver.getRawAxis(1)*0.8;
+    double y = driver.getRawAxis(1)*0.8;//Get the joystick values and reduce the max speed by 20%
     double rot = driver.getRawAxis(4)*-0.8;
-    if(Math.abs(y) >= 0.1 || Math.abs(rot) >= 0.1) {
-      mainDrive.arcadeDrive(y, rot);
-    } else if(driver.getRawButton(4)) {
-      if(limelight.hasValidTarget()) {
-        double height = limelight.getHeight();
-        double speed = 0;
-        if(9 <= height && height <= 11) {
-          speed = 0;
-        } else {
-          speed = (height-10) * 0.2;
+
+    if(Math.abs(y) >= 0.1 || Math.abs(rot) >= 0.1) {//Check the threshholds
+      mainDrive.arcadeDrive(y, rot);//Drive with joystick values
+    } else if(driver.getRawButton(4)) {//If the Y button is pressed, activate vision tracking mode
+      if(limelight.hasValidTarget()) {//If the limelight sees something...
+        /*
+        goalHeight is the perceived object height the robot is trying to reach.
+        A larger height means closer. You can set the threshold tolerance by
+        adjusting the goalThreshold value. Currently it is set to not move when
+        the perceived height is between 9 and 11. If you change distanceKP, it
+        changes how fast the robot with turn towards the target. Be careful: if
+        it is too high, the robot will oscillate out of control.
+        */
+        double height = limelight.getHeight();//Get the perceived height of the object (used for front-to-back position)
+        double speed = 0;//Create a variable to store the calculated forwards speed
+        if(goalHeight-goalThreshold <= height &&  height <= goalHeight+goalThreshold) {//If the front to back is within a threshhold...
+          speed = 0;//Set the speed to 0
+        } else {//If the object is not in the threshold...
+          speed = (height-goalHeight) * distanceKP;//Set the speed to the height minus the goal times kP
         }
-        mainDrive.arcadeDrive(speed, turnPID.get());
-      } else {
-        mainDrive.arcadeDrive(0, 0);
+        mainDrive.arcadeDrive(speed, limelight.getX()*rotationKP); //Drive the robot
+      } else {//If there are no valid targets...
+        mainDrive.arcadeDrive(0, 0);//Stop
       }
-    } else {
-      mainDrive.arcadeDrive(0, 0);
+    } else {//If the user does not want to drive...
+      mainDrive.arcadeDrive(0, 0);//Stop
     }
 
     read();//Read from sensors
@@ -102,10 +103,7 @@ public class Robot extends TimedRobot {
   private void read() {
     SmartDashboard.putNumber("Center-x", limelight.getX());
     SmartDashboard.putNumber("NavX", navx.getAngle());
-    SmartDashboard.putNumber("Skew", limelight.getSkew());
     SmartDashboard.putNumber("Center-y", limelight.getY());
-    SmartDashboard.putBoolean("in1", in1.get());
-    SmartDashboard.putBoolean("in2", in2.get());
     SmartDashboard.putNumber("Height", limelight.getHeight());
   }
 
