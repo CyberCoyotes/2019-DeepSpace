@@ -12,8 +12,16 @@ public class CTREEncoder implements PIDSource {
         talon = new WPI_TalonSRX(id);
     }
 
+    public CTREEncoder(WPI_TalonSRX _talon) {
+        talon = _talon;
+    }
+
     public int get() {
         return talon.getSelectedSensorPosition();
+    }
+
+    public void setPosition(int pos) {
+        talon.setSelectedSensorPosition(pos);
     }
 
     @Override
