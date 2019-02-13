@@ -1,14 +1,15 @@
 package frc.robot;
 
+import com.ctre.phoenix.motorcontrol.ControlMode;
 import com.ctre.phoenix.motorcontrol.can.WPI_TalonSRX;
 import com.ctre.phoenix.motorcontrol.can.WPI_VictorSPX;
 import com.kauailabs.navx.frc.AHRS;
 
-import edu.wpi.first.wpilibj.AnalogInput;
 import edu.wpi.first.wpilibj.DoubleSolenoid;
 import edu.wpi.first.wpilibj.Encoder;
 import edu.wpi.first.wpilibj.Joystick;
 import edu.wpi.first.wpilibj.Preferences;
+import edu.wpi.first.wpilibj.Servo;
 import edu.wpi.first.wpilibj.Solenoid;
 import edu.wpi.first.wpilibj.SpeedControllerGroup;
 import edu.wpi.first.wpilibj.TimedRobot;
@@ -18,6 +19,7 @@ import edu.wpi.first.wpilibj.drive.DifferentialDrive;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 
 public class Robot extends TimedRobot {
+
   WPI_TalonSRX left1 = new WPI_TalonSRX(3);
   WPI_VictorSPX left2 = new WPI_VictorSPX(2);
   WPI_VictorSPX left3 = new WPI_VictorSPX(1);
@@ -30,54 +32,59 @@ public class Robot extends TimedRobot {
 
   WPI_VictorSPX intake = new WPI_VictorSPX(7);//Victor for intake motor
   WPI_VictorSPX wrist = new WPI_VictorSPX(6);//Victor for wrist motor
-  WPI_TalonSRX elevator1 = new WPI_TalonSRX(4);//Talon for the elevator
+  WPI_TalonSRX elevator = new WPI_TalonSRX(4);//Talon for the elevator
   WPI_VictorSPX elevator2 = new WPI_VictorSPX(8);//Victor for the elevator
-  SpeedControllerGroup elevator = new SpeedControllerGroup(elevator1, elevator2);//Group the elevator controllers together
+  WPI_VictorSPX liftDriver = new WPI_VictorSPX(5);
 
-  WPI_VictorSPX liftDriver = new WPI_VictorSPX(5);//Victor for the motor that drives the robot for the climb
+  DoubleSolenoid.Value in = DoubleSolenoid.Value.kReverse;
+  DoubleSolenoid.Value out = DoubleSolenoid.Value.kForward;
+  DoubleSolenoid shifter = new DoubleSolenoid(3, 4);
+  DoubleSolenoid frontLift = new DoubleSolenoid(2, 5);
+  DoubleSolenoid backLift = new DoubleSolenoid(1, 6);
+  Solenoid puncher = new Solenoid(7);
 
-  DoubleSolenoid shifter = new DoubleSolenoid(0, 1);
-  DoubleSolenoid frontLift = new DoubleSolenoid(2, 3);
-  DoubleSolenoid backLift = new DoubleSolenoid(4, 5);
-  Solenoid puncher = new Solenoid(6);
+  Servo leftServo = new Servo(0);
+  Servo rightServo = new Servo(1);
   
   Joystick driver = new Joystick(0);//Joystick for the driver
   Joystick manip = new Joystick(1);
   AHRS navx = new AHRS(Port.kMXP);//NavX
   Limelight limelight = new Limelight();//Limelight object to handle getting the data
-  CTREEncoder leftEnc = new CTREEncoder(left1);
-  CTREEncoder rightEnc = new CTREEncoder(right1);
-  CTREEncoder elevatorEnc = new CTREEncoder(elevator1);
+  CTREEncoder leftEnc = new CTREEncoder(left1, false);
+  CTREEncoder rightEnc = new CTREEncoder(right1, false);
+  CTREEncoder elevatorEnc = new CTREEncoder(elevator, false);
   PressureSensor pressureSensor = new PressureSensor(3);
   Encoder wristEnc = new Encoder(0, 1, false, EncodingType.k2X);
 
-  double goalHeight = 10;//Used in vision processing
-  double goalThreshold = 1;
-  double distanceKP = 0.2;
-  double rotationKP = 0.04;
-  double liftKP = 0;
-  double wristKP = 0;
-  double stillKP = 0;
   double liftSetPoint = 0;
-  double wristSetPoint = 0;
+  double wristSetPoint = 94;
 
-  double hatch1 = 0;//TODO
-  double hatch2 = 0;
-  double hatch3 = 0;
-  double port1 = 0;
-  double port2 = 0;
-  double port3 = 0;
-  double vertical = 0;
-  double wristFloor = 0;
-  double liftFloor = 0;
-  double ballPick = 0;
-  boolean track = false;
+  double liftKP = 0;
+  double wristKP = -0.1;
+  double stillKP = -0.3;
+
+  final double hatch1 = 0;//TODO
+  final double hatch2 = 0;
+  final double hatch3 = 0;
+  final double port1 = 0;
+  final double port2 = 0;
+  final double port3 = 0;
+  final double vertical = 90;
+  final double wristFloor = 0;
+  final double liftFloor = 0;
+  final double ballPick = 0;
+
+  long servoTime;
+  boolean closed = false;
+  boolean updateSD = true;
 
   Preferences tuner = Preferences.getInstance();
 
   @Override
   public void robotInit() {
     mainDrive.setSafetyEnabled(false);
+    elevator.setInverted(true);
+    elevator2.set(ControlMode.Follower, 4);
   }
 
   @Override
@@ -107,106 +114,93 @@ public class Robot extends TimedRobot {
     wristKP = tuner.getDouble("WristKP", 0.0);
     stillKP = tuner.getDouble("StillKP", 0.0);
 
-    double y = driver.getRawAxis(1)*0.8;//Get the joystick values and reduce the max speed by 20%
-    double rot = driver.getRawAxis(4)*-0.8;
+    double y = driver.getRawAxis(1);
+    double rot = driver.getRawAxis(4)*-1;
 
-    if(Math.abs(y) >= 0.1 || Math.abs(rot) >= 0.1) {//Check the threshholds
-      mainDrive.arcadeDrive(y, rot);//Drive with joystick values
-    } else if(driver.getRawButton(4)) {//If the Y button is pressed, activate vision tracking mode
-      if(limelight.hasValidTarget()) {//If the limelight sees something...
-        /*
-        goalHeight is the perceived object height the robot is trying to reach.
-        A larger height means closer. You can set the threshold tolerance by
-        adjusting the goalThreshold value. Currently it is set to not move when
-        the perceived height is between 9 and 11. If you change distanceKP, it
-        changes how fast the robot with turn towards the target. Be careful: if
-        it is too high, the robot will oscillate out of control.
-        */
-        double height = limelight.getHeight();//Get the perceived height of the object (used for front-to-back position)
-        double speed = 0;//Create a variable to store the calculated forwards speed
-        if(goalHeight-goalThreshold <= height &&  height <= goalHeight+goalThreshold) {//If the front to back is within a threshhold...
-          speed = 0;//Set the speed to 0
-        } else {//If the object is not in the threshold...
-          speed = (height-goalHeight) * distanceKP;//Set the speed to the height minus the goal times kP
-        }
-        mainDrive.arcadeDrive(speed, limelight.getX()*rotationKP); //Drive the robot
-      } else {//If there are no valid targets...
-        mainDrive.arcadeDrive(0, 0);//Stop
-      }
-    } else {//If the user does not want to drive...
+    if(Math.abs(y) >= 0.05 || Math.abs(rot) >= 0.05) {
+      mainDrive.arcadeDrive(y, rot);
+    } else {
       mainDrive.arcadeDrive(0, 0);//Stop
     }
 
-    double liftSpeed = manip.getRawAxis(1);
-    if(Math.abs(liftSpeed) >= 0.05) {
+    shifter.set(driver.getRawButton(1) ? out : in);
+
+    double liftSpeed = manip.getRawAxis(5);
+    if(Math.abs(liftSpeed) >= 0.15) {
       elevator.set(liftSpeed);
       liftSetPoint = elevatorEnc.get();
     } else {
-      liftSpeed = (liftSetPoint - elevatorEnc.get()) * liftKP;
-      elevator.set(liftSpeed);
+      //liftSpeed = (liftSetPoint - elevatorEnc.get()) * liftKP;
+      //elevator.set(liftSpeed);
+      elevator.set(0);
     }
-    if(manip.getRawButton(1)) { 
-      liftSetPoint = hatch1;
-      wristSetPoint = vertical;
-    }
-    if(manip.getRawButton(2)) {
-      liftSetPoint = hatch2;
-      wristSetPoint = vertical;
-    }
-    if(manip.getRawButton(3)) {
-      liftSetPoint = hatch3;
-      wristSetPoint = vertical;
-    }
-    if(manip.getRawButton(4)) {
-      liftSetPoint = port1;
-    }
-    if(manip.getRawButton(5)) {
-      liftSetPoint = port2;
-    }
-    if(manip.getRawButton(6)) {
-      liftSetPoint = port3;
-    }
-
-    double wristSpeed = manip.getRawAxis(5);
-    if(Math.abs(wristSpeed) >= 0.05) {
+    
+    double wristSpeed = manip.getRawAxis(1);
+    double wristPosition = (-94.0/77.0)*wristEnc.get()+94;
+    if(Math.abs(wristSpeed) >= 0.15) {
       wrist.set(wristSpeed);
-      wristSetPoint = wristEnc.get();
+      wristSetPoint = wristPosition;
     } else {
-      double position = wristEnc.get();
-      wristSpeed = (wristSetPoint - position) * wristKP + Math.cos(position) * stillKP;
+      //wristSpeed = Math.cos(wristSetPoint) * stillKP;
+      wristSpeed = (wristSetPoint - wristPosition) * wristKP + Math.cos(wristPosition) * stillKP;
+      //wristSpeed = stillKP;
+      //wrist.set(wristSpeed);
+      SmartDashboard.putNumber("Wrist Speed", wristSpeed);
     }
-    if(manip.getRawButton(7)) {
-      wristSetPoint = vertical;
-    }
-    if(manip.getRawButton(8)) {
-      wristSetPoint = wristFloor;
-      liftSetPoint = liftFloor;
-    }
-    if(manip.getRawButton(9)) {
-      wristSetPoint = ballPick;
-    }
-
-    if(manip.getRawButton(1) && manip.getRawButton(10)) {
-      liftSetPoint = hatch1;
-      wristSetPoint = vertical;
+    
+    if(manip.getRawButton(3)) {
+      intake.set(0.3);
+    } else if (manip.getRawButton(4)) {
+      intake.set(-0.3);
+    } else {
+      intake.set(0);
     }
 
+    if(manip.getRawButtonPressed(5)) {
+      closed = true;
+      servoTime = System.currentTimeMillis();//Record the start time
+      rightServo.set(0.965);//Bring the first servo down
+    }
+    if(closed && System.currentTimeMillis() - servoTime > 250) {//If it has been 250 milliseconds...
+      leftServo.set(0);//Bring the other servo down
+    }
+    if(closed && System.currentTimeMillis() - servoTime > 1000) {//If it has been 500 milliseconds...
+      puncher.set(true);//Punch out the panel
+    }
+    if(closed && System.currentTimeMillis() - servoTime > 2000) {//If it has been 2 seconds...
+      closed = false;//Reset the servos and piston
+    }
+    if(!manip.getRawButton(5)) {
+      leftServo.set(0.4);
+      rightServo.set(0.4);
+      closed = false;
+      puncher.set(false);
+    }
     read();//Read from sensors
   }
 
   private void read() {
-    SmartDashboard.putNumber("Center-x", limelight.getX());
-    SmartDashboard.putNumber("NavX", navx.getAngle());
-    SmartDashboard.putNumber("Center-y", limelight.getY());
-    SmartDashboard.putNumber("Height", limelight.getHeight());
-    SmartDashboard.putNumber("Elevator Height", elevatorEnc.get());
-    SmartDashboard.putNumber("Wrist Angle", wristEnc.get());
-    SmartDashboard.putNumber("Left Encoder", leftEnc.get());
-    SmartDashboard.putNumber("Right Encoder", rightEnc.get());
-    SmartDashboard.putNumber("Read wristKP", wristKP);
-    SmartDashboard.putNumber("Read liftKP", liftKP);
-    SmartDashboard.putNumber("Read stillKP", stillKP);
-    SmartDashboard.putNumber("Pressure", pressureSensor.get());
+    if(updateSD) {
+      liftKP = tuner.getDouble("LiftKP", 0.0);
+      wristKP = tuner.getDouble("WristKP", 0.0);
+      stillKP = tuner.getDouble("StillKP", 0.0);
+      SmartDashboard.putNumber("Center-x", limelight.getX());
+      SmartDashboard.putNumber("NavX", navx.getAngle());
+      SmartDashboard.putNumber("Center-y", limelight.getY());
+      SmartDashboard.putNumber("Height", limelight.getHeight());
+      SmartDashboard.putNumber("Elevator Height", elevatorEnc.get());
+      SmartDashboard.putNumber("Wrist Angle", (-94.0/77.0)*wristEnc.get()+94);
+      SmartDashboard.putNumber("Left Encoder", leftEnc.get());
+      SmartDashboard.putNumber("Right Encoder", rightEnc.get());
+      SmartDashboard.putNumber("Read wristKP", wristKP);
+      SmartDashboard.putNumber("Read liftKP", liftKP);
+      SmartDashboard.putNumber("Read stillKP", stillKP);
+      SmartDashboard.putNumber("Pressure", pressureSensor.get());
+      SmartDashboard.putNumber("Left Elevator Voltage", elevator.getMotorOutputVoltage());
+      SmartDashboard.putNumber("Manip Axis 5", manip.getRawAxis(5));
+      SmartDashboard.putNumber("Driver Axis 5", driver.getRawAxis(5));
+    }
+    updateSD = !updateSD;
   }
 
   @Override

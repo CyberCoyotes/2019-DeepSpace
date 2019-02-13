@@ -8,16 +8,22 @@ import edu.wpi.first.wpilibj.PIDSourceType;
 public class CTREEncoder implements PIDSource {
 
     WPI_TalonSRX talon;
-    public CTREEncoder(int id) {
+    boolean invert;
+
+    public CTREEncoder(int id, boolean invert) {
         talon = new WPI_TalonSRX(id);
+        talon.getSensorCollection();
+        this.invert = invert;
     }
 
-    public CTREEncoder(WPI_TalonSRX _talon) {
+    public CTREEncoder(WPI_TalonSRX _talon, boolean invert) {
         talon = _talon;
+        talon.getSensorCollection();
+        this.invert = invert;
     }
 
     public int get() {
-        return talon.getSelectedSensorPosition();
+        return invert ? -talon.getSelectedSensorPosition() : talon.getSelectedSensorPosition();
     }
 
     public void setPosition(int pos) {
