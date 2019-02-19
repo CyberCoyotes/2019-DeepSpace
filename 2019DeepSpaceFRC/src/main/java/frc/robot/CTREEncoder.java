@@ -30,6 +30,10 @@ public class CTREEncoder implements PIDSource {
         talon.setSelectedSensorPosition(pos);
     }
 
+    public void reset() {
+        setPosition(0);
+    }
+
     @Override
     public double pidGet() {
         return get();
