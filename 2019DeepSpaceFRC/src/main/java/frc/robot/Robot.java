@@ -39,8 +39,8 @@ public class Robot extends TimedRobot {
   DoubleSolenoid.Value in = DoubleSolenoid.Value.kReverse;
   DoubleSolenoid.Value out = DoubleSolenoid.Value.kForward;
   DoubleSolenoid shifter = new DoubleSolenoid(3, 4);
-  DoubleSolenoid frontLift = new DoubleSolenoid(2, 5);
-  DoubleSolenoid backLift = new DoubleSolenoid(1, 6);
+  DoubleSolenoid frontLift = new DoubleSolenoid(1, 6);
+  DoubleSolenoid backLift = new DoubleSolenoid(2, 5);
   Solenoid puncher = new Solenoid(7);
 
   Servo leftServo = new Servo(0);
@@ -61,30 +61,29 @@ public class Robot extends TimedRobot {
   double liftKP = -0.00025;
   double wristKP = -0.04;
   double turnKP = -0.019;//0.05
-  double straightKP = 0.03;//0.004
 
+  final double liftHatchOffset = 10000;
+  final double liftOffset = 2000;
+  double previous = 0;
   final double hatch1 = 0;//TO DO
-  final double hatch2 = 0;
-  final double hatch3 = 0;
-  final double port1 = 0;
-  final double port2 = 0;
-  final double port3 = 0;
-  final double vertical = 90;
-  final double wristFloor = 0;
-  final double liftFloor = 0;
-  final double ballPick = 0;
+  final double hatch2 = 26896;
+  final double hatch3 = 53792;
+  final double port1 = 13000;
+  final double port2 = 30000;
+  final double port3 = 60000;
 
   long servoTime = Long.MAX_VALUE;
   int lastPOVState = -1;
   boolean down = false;
-  boolean updateSD = true;
-  boolean point = false;
+  boolean wristDown = true;
+  boolean lift20Toggle = false;
 
   @Override
   public void robotInit() {
     mainDrive.setSafetyEnabled(false);
     elevator1.setInverted(true);
     wrist2.setInverted(true);
+    elevatorEnc.reset();
   }
 
   @Override
@@ -98,10 +97,12 @@ public class Robot extends TimedRobot {
 
   @Override
   public void autonomousInit() {
+    teleopInit();
   }
 
   @Override
   public void autonomousPeriodic() {
+    teleopPeriodic();
   }
 
   @Override
@@ -119,119 +120,169 @@ public class Robot extends TimedRobot {
     double y = Math.pow(driver.getRawAxis(1), 1);
     double rot = Math.pow(-driver.getRawAxis(2), 1);
 
-    if(Math.abs(y) >= 0.15 || Math.abs(rot) >= 0.15) {
-      mainDrive.arcadeDrive(y, rot);
-    } else if(driver.getRawButton(1) && limelight.hasValidTarget()){
-      double rSpeed = limelight.getX()*turnKP;
-      double fSpeed = (limelight.getHeight()-64)*straightKP;
-      mainDrive.arcadeDrive(fSpeed , rSpeed);
-    } else {
-      mainDrive.arcadeDrive(0,0);
-    }
-
-    if(driver.getRawButton(12)) {
-      liftSetPoint = hatch1;
-    }
-    if(driver.getRawButton(10)) {
+    if(driver.getRawButtonPressed(1)) {
+      previous = liftSetPoint;
       liftSetPoint = hatch2;
     }
-    if(driver.getRawButton(8)) {
-      liftSetPoint = hatch3;
+    if(Math.abs(y) >= 0.15 || Math.abs(rot) >= 0.15) {
+      mainDrive.arcadeDrive(y, rot);
+    } else if(driver.getRawButton(1) && limelight.hasValidTarget()) {
+      double rSpeed = limelight.getX()*turnKP;
+      mainDrive.arcadeDrive(y, rSpeed);
+    } else if(driver.getRawButton(2) && limelight.hasValidTarget()) {
+      double rSpeed = limelight.getX()*turnKP;
+      mainDrive.arcadeDrive(y, rSpeed);
+    } else {
+      mainDrive.arcadeDrive(0, 0);
     }
+    if(driver.getRawButtonReleased(1)) {
+      liftSetPoint = previous;
+    }
+    
 
     shifter.set(out);
 
-    double liftSpeed = manip.getRawAxis(1);
-    if(liftSpeed < 0) {
-      liftSpeed*=0.5;
+    if(manip.getRawButton(6)) {
+      backLift.set(out);
     } else {
-      liftSpeed *= 0.15;
+      backLift.set(in);
     }
-    if(Math.abs(liftSpeed) >= 0.05) {
-      //elevator.set(liftSpeed);
-      liftSetPoint = elevatorEnc.get();
+    if(manip.getRawButton(5)) {
+      frontLift.set(out);
     } else {
-      liftSpeed = (liftSetPoint - elevatorEnc.get()) * liftKP;
-      if(liftSpeed > 0.5) {
-        liftSpeed = 0.5;
-      } else if(liftSpeed < -0.5) {
-        liftSpeed = -0.15;
-      }
-      //elevator.set(liftSpeed);
-    }
-    elevator.set(0);
-
-    double wristSpeed = manip.getRawAxis(5);
-    wristSpeed = wristSpeed > 0 ? wristSpeed*=0.2 : wristSpeed;
-    double wristPosition = (-94.0/91.0)*wristEnc.get()+94;
-    if(Math.abs(wristSpeed) >= 0.05) {
-      wrist.set(wristSpeed);
-      wrist2.set(wristSpeed);
-      wristSetPoint = wristPosition;
-    } else {
-      wristSpeed = (wristSetPoint - wristPosition) * wristKP;
-      wrist.set(wristSpeed);
-      wrist2.set(wristSpeed);
-      SmartDashboard.putNumber("Wrist Speed", wristSpeed);
+      frontLift.set(in);
     }
 
-    int currentPOVState = manip.getPOV();
-    if(currentPOVState > lastPOVState) {
-      if(currentPOVState == 0) {
-        servoTime = System.currentTimeMillis();
-        down = true;
-        rightServo.set(0);
+    double liftSpeed = manip.getRawAxis(1); //Get the manual lift speed
+    if(liftSpeed < 0) { //If the manual speed is negative...
+      liftSpeed*=0.9; //Limit the up speed
+    } else {  //Else...
+      liftSpeed*=0.5; //Limit the down speed
+    }
+    if(driver.getRawButtonPressed(12)) {  //If the driver pressed button 12...
+      liftSetPoint = hatch1;  //Set the base height to hatch1
+      if(lift20Toggle) {  //If the hook offset is true...
+        liftSetPoint+=liftHatchOffset;  //Add the offset
       }
-      if(currentPOVState == 180) {
-        servoTime = System.currentTimeMillis();
-        down = false;
-        rightServo.set(1);
+    }
+    if(driver.getRawButtonPressed(11)) {  //If the driver pressed button 12...
+      liftSetPoint = port1;  //Set the base height to port1
+      lift20Toggle = false;
+    }
+    if(driver.getRawButtonPressed(10)) {  //If the driver presses button 10...
+      liftSetPoint = hatch2;  //Set the base height to hatch2
+      if(lift20Toggle) {  //If the hook offset is true...
+        liftSetPoint+=liftHatchOffset;  //Add the offsett
       }
     }
-    if(!down && System.currentTimeMillis() - servoTime >= 300) {
-      leftServo.set(0);
+    if(driver.getRawButtonPressed(9)) {  //If the driver presses button 10...
+      liftSetPoint = port2;  //Set the base height to port2
+      lift20Toggle = false;
     }
-    if(!down && System.currentTimeMillis() - servoTime >= 600 && System.currentTimeMillis() - servoTime < 1000) {
-      puncher.set(true);
+    if(driver.getRawButtonPressed(8)) { //If the driver presses button 8...
+      liftSetPoint = hatch3;  //Set the base height to hatch3
+      if(lift20Toggle) {  //If the hook offset is true...
+        liftSetPoint+=liftHatchOffset;  //Add the offset
+      }
     }
-    if(!down && System.currentTimeMillis() - servoTime >= 1000) {
-      puncher.set(false);
+    if(driver.getRawButtonPressed(7)) { //If the driver presses button 8...
+      liftSetPoint = port3;  //Set the base height to hatch3
+      lift20Toggle = false;
     }
-    if(down && System.currentTimeMillis() - servoTime >= 300) {
-      leftServo.set(1);
+    if(Math.abs(liftSpeed) >= 0.05) { //If the manip wants to manual control the elevator...
+      elevator.set(liftSpeed);  //Set the elevator speed
+      liftSetPoint = elevatorEnc.get(); //Set the PID setpoint to the current reading
+    } else {  //Else (if the PID is activated)
+      liftSpeed = (liftSetPoint - elevatorEnc.get()) * liftKP;  //Calculate the lift speed based on error
+      if(liftSpeed > 0.4) { //Limit the down speed
+        liftSpeed = 0.4;
+      } else if(liftSpeed < -0.75) {  //Limit the up speed
+        liftSpeed = -0.75;
+      }
+      elevator.set(liftSpeed);  //Set the elevator
     }
-    lastPOVState = currentPOVState;
+    if(driver.getRawButtonPressed(5)) { //If button 5 is pressed...
+      lift20Toggle=!lift20Toggle; //Switch the lift hook toggle
+      if(lift20Toggle) {  //If the toggle is on...
+        liftSetPoint+=liftHatchOffset;  //Add the toggle
+      } else {  //If the toggle is off...
+        liftSetPoint-=liftHatchOffset;  //Remove the toggle
+      }
+    }
+    if(driver.getRawButtonPressed(3)) { //If button 3 is pressed...
+      liftSetPoint+=liftOffset; //Add 2 inches
+    }
+    if(driver.getRawButtonReleased(3)) {  //If button 3 is released...
+      liftSetPoint-=liftOffset; //Remove 2 inches
+    }
+    if(driver.getRawButtonPressed(4)) { //If button 4 is pressed...
+      liftSetPoint-=liftOffset; //Remove 2 inches
+    }
+    if(driver.getRawButtonReleased(4)) {  //If button 4 is released
+      liftSetPoint+=liftOffset; //Add 2 inches
+    }
 
-    if (manip.getRawAxis(2) >= 0.5){
-      intake.set(0.6); 
-    } else if (manip.getRawAxis(3) >= 0.5){
-      intake.set(-0.6); 
-    } else {
-      intake.set(0);
+    double wristSpeed = manip.getRawAxis(5);  //Get the manual wrist speed
+    wristSpeed = wristSpeed > 0 ? wristSpeed*=0.2 : wristSpeed; //Limit the down speed
+    double wristPosition = (-94.0/91.0)*wristEnc.get()+94;  //Calculate the current angle
+    if(Math.abs(wristSpeed) >= 0.05) {  //If the manip wants to manually move the wrist...
+      wrist.set(wristSpeed);  //Set wrist 1
+      wrist2.set(wristSpeed); //Set wrist 2
+      wristSetPoint = wristPosition;  //Get the current position
+    } else {  //Else (if PID is activated)...
+      wristSpeed = (wristSetPoint - wristPosition) * wristKP; //Calculate the speed based off of the error
+      wrist.set(wristSpeed);  //Set wrist1
+      wrist2.set(wristSpeed); //Set wrist2
+      SmartDashboard.putNumber("Wrist Speed", wristSpeed);  //Publish the speed
     }
 
-    if(manip.getRawButton(10)){
-      point = !point; // if button 10 is pressed, then point turns true/false.
-      if (point){ // if point = true, then set it to the floor
-        wristSetPoint = wristFloor;
-      } else { // if point = false. then set it to the KP (Constant Proportional) vertical
-        wristSetPoint = vertical;
+    int currentPOVState = manip.getPOV();//Get the manip POV
+    if(currentPOVState > lastPOVState) {//If the current POV angle is different than the old one...
+      if(currentPOVState == 0) {//if the POV is up...
+        servoTime = System.currentTimeMillis();//Record the time
+        down = true;//Active the servo down boolean
+        rightServo.set(0);//Set the right servo to up
+      } else if(currentPOVState == 180) {//if the POV is down...
+        servoTime = System.currentTimeMillis();//Record the time
+        down = false;//Deactivate the servo down boolean
+        rightServo.set(1);//Set the right servo to down
       }
     }
+    if(!down && System.currentTimeMillis() - servoTime >= 300) {//If it has been 300ms since the POV was pushed down...
+      leftServo.set(0);//Set the left servo to down
+    }
+    if(!down && System.currentTimeMillis() - servoTime >= 600 && System.currentTimeMillis() - servoTime < 1000) {//If it has been 600ms since the POV was pushed down...
+      puncher.set(true);//Activate the punchers
+    }
+    if(!down && System.currentTimeMillis() - servoTime >= 1000) {//If it has been 1000ms since the POV was pushed down...
+      puncher.set(false);//Deactivate the punchers
+    }
+    if(down && System.currentTimeMillis() - servoTime >= 300) {//If it has been 300ms since the POV was pushed up...
+      leftServo.set(1);//Set the left servo to up
+    }
+    lastPOVState = currentPOVState;//Reset the last POV value
+
+    if (manip.getRawAxis(2) >= 0.25) {//If left trigger is pressed...
+      intake.set(0.6);//Move the intake out
+    } else if (manip.getRawAxis(3) >= 0.25) {//If right trigger is pressed...
+      intake.set(-0.6); //Move the intake motor in.
+    } else {//If nothing is pressed...
+      intake.set(0);//Set the intake to stop
+    }
+
     read();//Read from sensors
   }
 
   private void read() {
-    if(updateSD) {
-      SmartDashboard.putNumber("Center-x", limelight.getX());
-      SmartDashboard.putNumber("NavX", navx.getAngle());
-      SmartDashboard.putNumber("Center-y", limelight.getY());
-      SmartDashboard.putNumber("Height", limelight.getHeight());
-      SmartDashboard.putNumber("Pressure", pressureSensor.get());
-      SmartDashboard.putNumber("Elevator Speed 2", elevator.get());
-      SmartDashboard.putNumber("Elevator Height", elevatorEnc.get());
-    }
-    updateSD = !updateSD;
+    SmartDashboard.putNumber("Center-x", limelight.getX());
+    SmartDashboard.putNumber("NavX", navx.getAngle());
+    SmartDashboard.putNumber("Center-y", limelight.getY());
+    SmartDashboard.putNumber("Height", limelight.getHeight());
+    SmartDashboard.putNumber("Pressure", pressureSensor.get());
+    SmartDashboard.putNumber("Elevator Speed 2", elevator.get());
+    SmartDashboard.putNumber("Elevator Height", elevatorEnc.get());
+    SmartDashboard.putNumber("WristAngle", (-94.0/91.0)*wristEnc.get()+94);
+    SmartDashboard.putNumber("Lift Set Point", liftSetPoint);
   }
 
   @Override
