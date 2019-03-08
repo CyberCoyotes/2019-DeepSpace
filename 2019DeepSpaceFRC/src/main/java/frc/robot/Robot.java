@@ -4,6 +4,7 @@ import com.ctre.phoenix.motorcontrol.can.WPI_TalonSRX;
 import com.ctre.phoenix.motorcontrol.can.WPI_VictorSPX;
 import com.kauailabs.navx.frc.AHRS;
 
+import edu.wpi.first.cameraserver.CameraServer;
 import edu.wpi.first.wpilibj.DoubleSolenoid;
 import edu.wpi.first.wpilibj.Encoder;
 import edu.wpi.first.wpilibj.Joystick;
@@ -40,7 +41,7 @@ public class Robot extends TimedRobot {
   DoubleSolenoid.Value out = DoubleSolenoid.Value.kForward;
   DoubleSolenoid shifter = new DoubleSolenoid(3, 4);
   DoubleSolenoid frontLift = new DoubleSolenoid(1, 6);
-  DoubleSolenoid backLift = new DoubleSolenoid(2, 5);
+  DoubleSolenoid backLift = new DoubleSolenoid(5, 2);
   Solenoid puncher = new Solenoid(7);
 
   Servo leftServo = new Servo(0);
@@ -50,6 +51,7 @@ public class Robot extends TimedRobot {
   Joystick manip = new Joystick(1);
   AHRS navx = new AHRS(Port.kMXP);//NavX
   Limelight limelight = new Limelight();//Limelight object to handle getting the data
+  CameraServer camera = CameraServer.getInstance();
   CTREEncoder rightEnc = new CTREEncoder(right1, false);
   CTREEncoder elevatorEnc = new CTREEncoder(elevator1, false);
   PressureSensor pressureSensor = new PressureSensor(3);
@@ -62,7 +64,7 @@ public class Robot extends TimedRobot {
   double wristKP = -0.04;
   double turnKP = -0.019;//0.05
 
-  final double liftHatchOffset = 10000;
+  final double liftHatchOffset = 20000;
   final double liftOffset = 2000;
   double previous = 0;
   final double hatch1 = 0;//TO DO
@@ -84,6 +86,7 @@ public class Robot extends TimedRobot {
     elevator1.setInverted(true);
     wrist2.setInverted(true);
     elevatorEnc.reset();
+    camera.startAutomaticCapture("cam0", 0);
   }
 
   @Override
@@ -142,16 +145,7 @@ public class Robot extends TimedRobot {
 
     shifter.set(out);
 
-    if(manip.getRawButton(6)) {
-      backLift.set(out);
-    } else {
-      backLift.set(in);
-    }
-    if(manip.getRawButton(5)) {
-      frontLift.set(out);
-    } else {
-      frontLift.set(in);
-    }
+    
 
     double liftSpeed = manip.getRawAxis(1); //Get the manual lift speed
     if(liftSpeed < 0) { //If the manual speed is negative...
@@ -263,11 +257,22 @@ public class Robot extends TimedRobot {
     lastPOVState = currentPOVState;//Reset the last POV value
 
     if (manip.getRawAxis(2) >= 0.25) {//If left trigger is pressed...
-      intake.set(0.6);//Move the intake out
+      intake.set(-0.6);//Move the intake out
     } else if (manip.getRawAxis(3) >= 0.25) {//If right trigger is pressed...
-      intake.set(-0.6); //Move the intake motor in.
+      intake.set(0.6); //Move the intake motor in.
     } else {//If nothing is pressed...
       intake.set(0);//Set the intake to stop
+    }
+
+    if(manip.getRawButton(6)) {
+      backLift.set(out);
+    } else {
+      backLift.set(in);
+    }
+    if(manip.getRawButton(5)) {
+      frontLift.set(out);
+    } else {
+      frontLift.set(in);
     }
 
     read();//Read from sensors
