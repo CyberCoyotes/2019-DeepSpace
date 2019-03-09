@@ -51,7 +51,7 @@ public class Robot extends TimedRobot {
   Joystick manip = new Joystick(1);
   AHRS navx = new AHRS(Port.kMXP);//NavX
   Limelight limelight = new Limelight();//Limelight object to handle getting the data
-  CameraServer camera = CameraServer.getInstance();
+  //CameraServer camera = CameraServer.getInstance();
   CTREEncoder rightEnc = new CTREEncoder(right1, false);
   CTREEncoder elevatorEnc = new CTREEncoder(elevator1, false);
   PressureSensor pressureSensor = new PressureSensor(3);
@@ -64,8 +64,8 @@ public class Robot extends TimedRobot {
   double wristKP = -0.04;
   double turnKP = -0.019;//0.05
 
-  final double liftHatchOffset = 20000;
-  final double liftOffset = 2000;
+  final double liftHatchOffset = 16000;
+  final double liftOffset = 2500;
   double previous = 0;
   final double hatch1 = 0;//TO DO
   final double hatch2 = 26896;
@@ -79,6 +79,7 @@ public class Robot extends TimedRobot {
   boolean down = false;
   boolean wristDown = true;
   boolean lift20Toggle = false;
+  boolean wasAuton = false;
 
   @Override
   public void robotInit() {
@@ -86,7 +87,7 @@ public class Robot extends TimedRobot {
     elevator1.setInverted(true);
     wrist2.setInverted(true);
     elevatorEnc.reset();
-    camera.startAutomaticCapture("cam0", 0);
+    //camera.startAutomaticCapture("cam0", 0);
   }
 
   @Override
@@ -101,6 +102,7 @@ public class Robot extends TimedRobot {
   @Override
   public void autonomousInit() {
     teleopInit();
+    wasAuton = true;
   }
 
   @Override
@@ -110,11 +112,15 @@ public class Robot extends TimedRobot {
 
   @Override
   public void teleopInit() {
-    wristSetPoint = (-94.0/91.0)*wristEnc.get()+94;
-    elevatorEnc.reset();
-    liftSetPoint = elevatorEnc.get();
-    rightServo.set(0);
-    leftServo.set(1);
+    if(!wasAuton) {
+      wristSetPoint = (-94.0/91.0)*wristEnc.get()+94;
+      wristSetPoint = 85;
+      elevatorEnc.reset();
+      liftSetPoint = elevatorEnc.get();
+      rightServo.set(0);
+      leftServo.set(1);
+      wasAuton = false;
+    }
   }
 
   @Override
@@ -145,7 +151,6 @@ public class Robot extends TimedRobot {
 
     shifter.set(out);
 
-    
 
     double liftSpeed = manip.getRawAxis(1); //Get the manual lift speed
     if(liftSpeed < 0) { //If the manual speed is negative...
@@ -179,14 +184,18 @@ public class Robot extends TimedRobot {
         liftSetPoint+=liftHatchOffset;  //Add the offset
       }
     }
+    
     if(driver.getRawButtonPressed(7)) { //If the driver presses button 8...
       liftSetPoint = port3;  //Set the base height to hatch3
       lift20Toggle = false;
     }
-    if(Math.abs(liftSpeed) >= 0.05) { //If the manip wants to manual control the elevator...
+    if(Math.abs(liftSpeed) >= 0.05 && !(elevatorEnc.get() < 2000 && liftSpeed >= 0)) { //If the manip wants to manual control the elevator...
       elevator.set(liftSpeed);  //Set the elevator speed
       liftSetPoint = elevatorEnc.get(); //Set the PID setpoint to the current reading
     } else {  //Else (if the PID is activated)
+      if(liftSetPoint < 2000) {
+        liftSetPoint = 2000;
+      }
       liftSpeed = (liftSetPoint - elevatorEnc.get()) * liftKP;  //Calculate the lift speed based on error
       if(liftSpeed > 0.4) { //Limit the down speed
         liftSpeed = 0.4;
@@ -217,7 +226,7 @@ public class Robot extends TimedRobot {
     }
 
     double wristSpeed = manip.getRawAxis(5);  //Get the manual wrist speed
-    wristSpeed = wristSpeed > 0 ? wristSpeed*=0.2 : wristSpeed; //Limit the down speed
+    wristSpeed = wristSpeed > 0 ? wristSpeed*=0.25 : wristSpeed; //Limit the down speed
     double wristPosition = (-94.0/91.0)*wristEnc.get()+94;  //Calculate the current angle
     if(Math.abs(wristSpeed) >= 0.05) {  //If the manip wants to manually move the wrist...
       wrist.set(wristSpeed);  //Set wrist 1
