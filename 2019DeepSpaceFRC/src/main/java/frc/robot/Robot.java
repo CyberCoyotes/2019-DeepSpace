@@ -74,7 +74,7 @@ public class Robot extends TimedRobot {
 
   long servoTime = Long.MAX_VALUE;
   int lastPOVState = -1;
-  boolean down = false;
+  boolean down = true;
   boolean wristDown = true;
   boolean lift20Toggle = false;
   boolean wasAuton = false;
@@ -229,9 +229,11 @@ public class Robot extends TimedRobot {
 
       SmartDashboard.putNumber("Wrist Speed", wristSpeed);  //Publish the speed
     }
-
+    if(manip.getRawButtonPressed(4)) {
+      wristSetPoint = 90;
+    }
     if(manip.getRawButtonPressed(2)) {
-      wristSetPoint = 30;
+      wristSetPoint = 45;//Was 30
     }
 
     int currentPOVState = manip.getPOV();//Get the manip POV
@@ -240,7 +242,6 @@ public class Robot extends TimedRobot {
         servoTime = System.currentTimeMillis();//Record the time
         down = true;//Active the servo down boolean
         //rightServo.set(0);//Set the right servo to up
-        
       } else if(currentPOVState == 180) {//if the POV is down...
         servoTime = System.currentTimeMillis();//Record the time
         down = false;//Deactivate the servo down boolean
@@ -253,8 +254,6 @@ public class Robot extends TimedRobot {
       intake.set(0);
       puncher.set(true);
     }
-    
-    
     if(!down && System.currentTimeMillis() - servoTime >= 850) {//If it has been 600ms since the POV was pushed down...
       //puncher.set(true);//Activate the punchers
       puncher.set(false);
@@ -268,17 +267,6 @@ public class Robot extends TimedRobot {
       intake.set(0.6); //Move the intake motor in.
     } else if(down) {//If nothing is pressed...
       intake.set(0);//Set the intake to stop
-    }
-
-    if(manip.getRawButton(6)) {
-      backLift.set(out);
-    } else {
-      backLift.set(in);
-    }
-    if(manip.getRawButton(5)) {
-      frontLift.set(out);
-    } else {
-      frontLift.set(in);
     }
 
     read();//Read from sensors
