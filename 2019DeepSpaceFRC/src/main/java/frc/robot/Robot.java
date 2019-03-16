@@ -239,32 +239,34 @@ public class Robot extends TimedRobot {
       if(currentPOVState == 0) {//if the POV is up...
         servoTime = System.currentTimeMillis();//Record the time
         down = true;//Active the servo down boolean
-        rightServo.set(0);//Set the right servo to up
+        //rightServo.set(0);//Set the right servo to up
+        
       } else if(currentPOVState == 180) {//if the POV is down...
         servoTime = System.currentTimeMillis();//Record the time
         down = false;//Deactivate the servo down boolean
-        rightServo.set(1);//Set the right servo to down
+        //rightServo.set(1);//Set the right servo to down
+        intake.set(-0.4);
       }
     }
-    if(!down && System.currentTimeMillis() - servoTime >= 300) {//If it has been 300ms since the POV was pushed down...
-      leftServo.set(0);//Set the left servo to down
+    if(!down && System.currentTimeMillis() - servoTime >= 400) {//If it has been 300ms since the POV was pushed down...
+      //leftServo.set(0);//Set the left servo to down
+      intake.set(0);
+      puncher.set(true);
     }
-    if(!down && System.currentTimeMillis() - servoTime >= 600 && System.currentTimeMillis() - servoTime < 1000) {//If it has been 600ms since the POV was pushed down...
-      puncher.set(true);//Activate the punchers
-    }
-    if(!down && System.currentTimeMillis() - servoTime >= 1000) {//If it has been 1000ms since the POV was pushed down...
-      puncher.set(false);//Deactivate the punchers
-    }
-    if(down && System.currentTimeMillis() - servoTime >= 300) {//If it has been 300ms since the POV was pushed up...
-      leftServo.set(1);//Set the left servo to up
+    
+    
+    if(!down && System.currentTimeMillis() - servoTime >= 850) {//If it has been 600ms since the POV was pushed down...
+      //puncher.set(true);//Activate the punchers
+      puncher.set(false);
+      down = true;
     }
     lastPOVState = currentPOVState;//Reset the last POV value
 
-    if (manip.getRawAxis(2) >= 0.25) {//If left trigger is pressed...
+    if (manip.getRawAxis(2) >= 0.25 && down) {//If left trigger is pressed...
       intake.set(-0.6);//Move the intake out
-    } else if (manip.getRawAxis(3) >= 0.25) {//If right trigger is pressed...
+    } else if (manip.getRawAxis(3) >= 0.25 && down) {//If right trigger is pressed...
       intake.set(0.6); //Move the intake motor in.
-    } else {//If nothing is pressed...
+    } else if(down) {//If nothing is pressed...
       intake.set(0);//Set the intake to stop
     }
 
